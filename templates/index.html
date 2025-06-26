@@ -3,18 +3,35 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Fluxo de Caixa</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='dashboard.css') }}">
+    <title>Fluxo de Caixa Simples</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; color: #333; }
+        .container { max-width: 800px; margin: auto; background: #f9f9f9; padding: 20px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+        h1 { color: #0056b3; text-align: center; }
+        .saldo-container { padding: 15px; background: #eef; border-radius: 5px; text-align: center; margin-bottom: 20px; }
+        .saldo { font-size: 2.5em; font-weight: bold; }
+        .saldo.positivo { color: #28a745; }
+        .saldo.negativo { color: #dc3545; }
+        .totais { display: flex; justify-content: space-around; margin-top: 10px; font-size: 1.1em; }
+        .entradas { color: #28a745; }
+        .saidas { color: #dc3545; }
+        
+        button, .btn { padding: 12px 20px; background-color: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer; text-decoration: none; display: block; width: 100%; font-size: 16px; text-align: center; box-sizing: border-box; }
+        button:hover, .btn:hover { background-color: #0056b3; }
+        .btn-secondary { background-color: #6c757d; margin-top: 10px; }
+        .btn-secondary:hover { background-color: #5a6268; }
+
+        .modal { display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; overflow: auto; background-color: rgba(0,0,0,0.5); }
+        .modal-content { background-color: #fefefe; margin: 10% auto; padding: 20px; border-radius: 8px; width: 90%; max-width: 500px; position: relative; animation: fadeIn 0.3s; }
+        @keyframes fadeIn { from {opacity: 0; transform: translateY(-20px);} to {opacity: 1; transform: translateY(0);} }
+        .close-btn { color: #aaa; position: absolute; top: 10px; right: 20px; font-size: 28px; font-weight: bold; cursor: pointer; }
+        .close-btn:hover, .close-btn:focus { color: black; }
+        .modal-content form { display: flex; flex-direction: column; gap: 10px; margin-bottom: 0; }
+    </style>
 </head>
 <body>
-    <div class="app-container">
-        <header class="app-header">
-            <div class="user-info">
-                Olá, <strong>{{ g.user['username'] }}</strong>
-            </div>
-            <a href="{{ url_for('logout') }}" class="btn btn-logout">Sair</a>
-        </header>
-
+    <div class="container">
+        <!-- A linha com o erro foi removida daqui -->
         <h1>Meu Fluxo de Caixa</h1>
 
         <div class="saldo-container">
@@ -28,31 +45,25 @@
             </div>
         </div>
 
-        <button id="addTransactionBtn" class="btn">Adicionar Nova Transação</button>
+        <!-- Botões de ação principais -->
+        <button id="addTransactionBtn">Adicionar Nova Transação</button>
         <a href="{{ url_for('extrato') }}" class="btn btn-secondary">Ver Extrato Completo</a>
     </div>
 
-    <!-- Modal (Pop-up) -->
+    <!-- Estrutura do Modal (Pop-up) -->
     <div id="addTransactionModal" class="modal">
         <div class="modal-content">
             <span class="close-btn">&times;</span>
             <h2>Adicionar Nova Transação</h2>
             <form action="{{ url_for('add_transacao') }}" method="post">
-                <label for="dateField">Data</label>
                 <input type="date" name="data_transacao" id="dateField" required>
-
-                <label for="descricao">Descrição</label>
-                <input type="text" name="descricao" id="descricao" placeholder="Ex: Salário, Aluguel" required>
-                
-                <label for="valor">Valor</label>
-                <input type="number" name="valor" id="valor" step="0.01" min="0.01" placeholder="Valor" required>
-                
-                <label>Tipo</label>
+                <input type="text" name="descricao" placeholder="Descrição (Ex: Salário, Aluguel)" required>
+                <input type="number" name="valor" step="0.01" min="0.01" placeholder="Valor" required>
                 <div>
-                    <label class="radio-label"><input type="radio" name="tipo" value="entrada" required> Entrada</label>
-                    <label class="radio-label"><input type="radio" name="tipo" value="saida"> Saída</label>
+                    <label><input type="radio" name="tipo" value="entrada" required> Entrada</label>
+                    <label><input type="radio" name="tipo" value="saida"> Saída</label>
                 </div>
-                <button type="submit" class="btn">Adicionar</button>
+                <button type="submit">Adicionar Transação</button>
             </form>
         </div>
     </div>
