@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fluxo de Caixa</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='dashboard.css') }}">
+</head>
+<body>
+    <div class="app-container">
+        <header class="app-header">
+            <div class="user-info">
+                Olá, <strong>{{ g.user['username'] }}</strong>
+            </div>
+            <a href="{{ url_for('logout') }}" class="btn btn-logout">Sair</a>
+        </header>
+
+        <h1>Meu Fluxo de Caixa</h1>
+
+        <div class="saldo-container">
+            <h2>Saldo Total</h2>
+            <div class="saldo {{ 'positivo' if saldo >= 0 else 'negativo' }}">
+                R$ {{ "%.2f"|format(saldo) }}
+            </div>
+            <div class="totais">
+                <span class="entradas">Entradas: R$ {{ "%.2f"|format(total_entradas) }}</span>
+                <span class="saidas">Saídas: R$ {{ "%.2f"|format(total_saidas) }}</span>
+            </div>
+        </div>
+
+        <button id="addTransactionBtn" class="btn">Adicionar Nova Transação</button>
+        <a href="{{ url_for('extrato') }}" class="btn btn-secondary">Ver Extrato Completo</a>
+    </div>
+
+    <!-- Modal (Pop-up) -->
+    <div id="addTransactionModal" class="modal">
+        <div class="modal-content">
+            <span class="close-btn">&times;</span>
+            <h2>Adicionar Nova Transação</h2>
+            <form action="{{ url_for('add_transacao') }}" method="post">
+                <label for="dateField">Data</label>
+                <input type="date" name="data_transacao" id="dateField" required>
+
+                <label for="descricao">Descrição</label>
+                <input type="text" name="descricao" id="descricao" placeholder="Ex: Salário, Aluguel" required>
+                
+                <label for="valor">Valor</label>
+                <input type="number" name="valor" id="valor" step="0.01" min="0.01" placeholder="Valor" required>
+                
+                <label>Tipo</label>
+                <div>
+                    <label class="radio-label"><input type="radio" name="tipo" value="entrada" required> Entrada</label>
+                    <label class="radio-label"><input type="radio" name="tipo" value="saida"> Saída</label>
+                </div>
+                <button type="submit" class="btn">Adicionar</button>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        const modal = document.getElementById('addTransactionModal');
+        const openModalBtn = document.getElementById('addTransactionBtn');
+        const closeBtn = document.querySelector('.close-btn');
+        const dateField = document.getElementById('dateField');
+
+        function openModal() {
+            const today = new Date();
+            const year = today.getFullYear();
+            const month = String(today.getMonth() + 1).padStart(2, '0');
+            const day = String(today.getDate()).padStart(2, '0');
+            dateField.value = `${year}-${month}-${day}`;
+            modal.style.display = 'block';
+        }
+
+        function closeModal() {
+            modal.style.display = 'none';
+        }
+
+        openModalBtn.addEventListener('click', openModal);
+        closeBtn.addEventListener('click', closeModal);
+
+        window.addEventListener('click', function(event) {
+            if (event.target == modal) {
+                closeModal();
+            }
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Extrato - Fluxo de Caixa</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='dashboard.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='extrato.css') }}">
+</head>
+<body>
+    <div class="app-container">
+        <header class="app-header">
+            <div class="user-info">
+                Olá, <strong>{{ g.user['username'] }}</strong>
+            </div>
+            <a href="{{ url_for('logout') }}" class="btn btn-logout">Sair</a>
+        </header>
+        
+        <h1>Extrato de Transações</h1>
+        <p style="text-align:center;"><a href="{{ url_for('index') }}">&larr; Voltar para a Página Principal</a></p>
+
+        <div class="saldo-container">
+            <h2>Resumo do Período</h2>
+            <div class="saldo {{ 'positivo' if saldo_periodo >= 0 else 'negativo' }}">
+                R$ {{ "%.2f"|format(saldo_periodo) }}
+            </div>
+            <div class="totais">
+                <span class="entradas">Entradas: R$ {{ "%.2f"|format(total_entradas_periodo) }}</span>
+                <span class="saidas">Saídas: R$ {{ "%.2f"|format(total_saidas_periodo) }}</span>
+            </div>
+        </div>
+
+        <form class="filter-form" method="get" action="{{ url_for('extrato') }}">
+            <div>
+                <label for="periodo">Filtrar por Período</label>
+                <select name="periodo" id="periodo">
+                    <option value="semana_atual" {% if periodo_selecionado == 'semana_atual' %}selected{% endif %}>Semana Atual</option>
+                    <option value="ultimos_7_dias" {% if periodo_selecionado == 'ultimos_7_dias' %}selected{% endif %}>Últimos 7 dias</option>
+                    <option value="ultimos_15_dias" {% if periodo_selecionado == 'ultimos_15_dias' %}selected{% endif %}>Últimos 15 dias</option>
+                    <option value="mes_atual" {% if periodo_selecionado == 'mes_atual' %}selected{% endif %}>Mês Atual</option>
+                    <option value="personalizado" {% if periodo_selecionado == 'personalizado' %}selected{% endif %}>Personalizado</option>
+                </select>
+            </div>
+            <div id="custom-range">
+                <div>
+                    <label for="start_date">De:</label>
+                    <input type="date" name="start_date" id="start_date" value="{{ start_date }}">
+                </div>
+                <div>
+                    <label for="end_date">Até:</label>
+                    <input type="date" name="end_date" id="end_date" value="{{ end_date }}">
+                </div>
+            </div>
+            <button type="submit" class="btn">Filtrar</button>
+        </form>
+
+        <div class="table-container">
+            <h2>Histórico do Período</h2>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Data</th>
+                        <th>Descrição</th>
+                        <th>Valor (R$)</th>
+                        <th>Tipo</th>
+                        <th>Ações</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for transacao in transacoes %}
+                    <tr>
+                        <td>{{ transacao.data_transacao }}</td>
+                        <td>{{ transacao.descricao }}</td>
+                        <td class="{{ 'tipo-entrada' if transacao.tipo == 'entrada' else 'tipo-saida' }}">
+                            {{ "%.2f"|format(transacao.valor) }}
+                        </td>
+                        <td class="{{ 'tipo-entrada' if transacao.tipo == 'entrada' else 'tipo-saida' }}">
+                            {{ transacao.tipo.capitalize() }}
+                        </td>
+                        <td class="actions-cell">
+                            <a href="{{ url_for('edit_transacao', id=transacao.id) }}" class="btn">Editar</a>
+                            <form action="{{ url_for('delete_transacao', id=transacao.id) }}" method="post" onsubmit="return confirm('Tem certeza que deseja apagar esta transação?');">
+                                <button type="submit" class="btn btn-delete">Apagar</button>
+                            </form>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <script>
+        const periodoSelect = document.getElementById('periodo');
+        const customRangeDiv = document.getElementById('custom-range');
+
+        function toggleCustomRange() {
+            if (periodoSelect.value === 'personalizado') {
+                customRangeDiv.style.display = 'flex';
+            } else {
+                customRangeDiv.style.display = 'none';
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', toggleCustomRange);
+        periodoSelect.addEventListener('change', toggleCustomRange);
+    </script>
+</body>
+</html>

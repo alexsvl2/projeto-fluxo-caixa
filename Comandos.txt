@@ -1,0 +1,9 @@
+
+
+
+
+
+1 - flask init-db (inicia o banco de dados)
+2 - python app.py (inicia a aplicação)
+
+http://127.0.0.1:5000/   (inicia a pagina)

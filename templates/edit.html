@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Editar Transação</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='dashboard.css') }}">
+</head>
+<body>
+    <div class="app-container">
+        <header class="app-header">
+            <div class="user-info">
+                Olá, <strong>{{ g.user['username'] }}</strong>
+            </div>
+            <a href="{{ url_for('logout') }}" class="btn btn-logout">Sair</a>
+        </header>
+        
+        <h1>Editar Transação</h1>
+
+        <form method="post" class="edit-form">
+            <label for="data_transacao">Data</label>
+            <input type="date" name="data_transacao" id="data_transacao" value="{{ transacao.data_transacao }}" required>
+            
+            <label for="descricao">Descrição</label>
+            <input type="text" name="descricao" id="descricao" value="{{ transacao.descricao }}" required>
+            
+            <label for="valor">Valor</label>
+            <input type="number" name="valor" id="valor" step="0.01" value="{{ transacao.valor }}" required>
+            
+            <label>Tipo</label>
+            <div>
+                <label class="radio-label"><input type="radio" name="tipo" value="entrada" {% if transacao.tipo == 'entrada' %}checked{% endif %} required> Entrada</label>
+                <label class="radio-label"><input type="radio" name="tipo" value="saida" {% if transacao.tipo == 'saida' %}checked{% endif %}> Saída</label>
+            </div>
+            
+            <button type="submit" class="btn">Salvar Alterações</button>
+            <a href="{{ url_for('extrato') }}" class="btn btn-secondary">Cancelar</a>
+        </form>
+    </div>
+</body>
+</html>
