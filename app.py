@@ -1,7 +1,7 @@
 import os
 from datetime import date, timedelta
-from flask import Flask, render_template, request, redirect, url_for, abort, cli
-from sqlalchemy import create_engine, Column, Integer, String, Float, Date
+from flask import Flask, render_template, request, redirect, url_for, abort
+from sqlalchemy import create_engine, Column, Integer, String, Float, Date, inspect
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.ext.declarative import declarative_base
 
@@ -13,7 +13,7 @@ DATABASE_URL = os.environ.get('DATABASE_URL')
 if DATABASE_URL is None:
     raise ValueError("Variável de ambiente DATABASE_URL não foi definida.")
 
-# Corrige a URL do PostgreSQL para SQLAlchemy (a Render usa 'postgres://' e o SQLAlchemy espera 'postgresql://')
+# Corrige a URL do PostgreSQL para SQLAlchemy
 if DATABASE_URL.startswith("postgres://"):
     DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
 
@@ -30,14 +30,26 @@ class Transacao(Base):
     descricao = Column(String, nullable=False)
     valor = Column(Float, nullable=False)
 
-# --- COMANDO PARA INICIALIZAR O BANCO ---
-@app.cli.command("init-db")
-def init_db_command():
-    """Cria as tabelas do banco de dados."""
-    Base.metadata.create_all(bind=engine)
-    print("Banco de dados inicializado.")
+# --- TRECHO MODIFICADO: INICIALIZAÇÃO AUTOMÁTICA ---
+def init_db_on_startup():
+    """
+    Verifica se a tabela de transações existe. Se não, cria todas as tabelas.
+    Isso substitui a necessidade do comando 'flask init-db' via shell.
+    """
+    inspector = inspect(engine)
+    if not inspector.has_table("transacoes"):
+        print("Tabela 'transacoes' não encontrada, criando banco de dados...")
+        Base.metadata.create_all(bind=engine)
+        print("Banco de dados inicializado com sucesso.")
+    else:
+        print("Tabela 'transacoes' já existe.")
 
-# --- ROTAS DA APLICAÇÃO ---
+# Executa a verificação na inicialização do app
+init_db_on_startup()
+# --- FIM DO TRECHO MODIFICADO ---
+
+
+# --- ROTAS DA APLICAÇÃO (sem alterações) ---
 
 @app.route('/')
 def index():
@@ -57,7 +69,6 @@ def extrato():
     periodo = request.args.get('periodo', 'mes_atual')
     today = date.today()
     
-    # Lógica de cálculo das datas (mesma de antes)
     if periodo == 'semana_atual':
         start_date, end_date = today - timedelta(days=today.weekday()), today + timedelta(days=6-today.weekday())
     elif periodo == 'ultimos_7_dias':
@@ -120,3 +131,4 @@ def delete_transacao(id):
         session.commit()
     session.close()
     return redirect(url_for('extrato'))
+
