@@ -43,35 +43,10 @@ class Transacao(db.Model):
 # --- FUNÇÃO DE CARREGAMENTO DE UTILIZADOR ---
 @login_manager.user_loader
 def load_user(user_id):
-    return Usuario.query.get(int(user_id))
-
-
-# --- ROTA DE SETUP (TEMPORÁRIA) ---
-@app.route('/setup/<username>/<password>')
-def setup_route(username, password):
-    """
-    Esta rota inicializa o banco de dados e cria o primeiro usuário.
-    Deve ser usada apenas uma vez e depois removida por segurança.
-    """
-    try:
-        # Cria todas as tabelas com base nos modelos definidos acima
-        with app.app_context():
-            db.create_all()
-
-        # Verifica se já existe algum usuário
-        if Usuario.query.first():
-            return "Erro: Um usuário já existe. A configuração já foi executada.", 403
-        
-        # Cria o novo usuário
-        hashed_password = generate_password_hash(password, method='pbkdf2:sha256')
-        new_user = Usuario(username=username, password=hashed_password)
-        db.session.add(new_user)
-        db.session.commit()
-        
-        return f"<h1>Configuração Concluída</h1><p>Banco de dados inicializado e usuário '{username}' criado com sucesso!</p><p><b>IMPORTANTE:</b> Remova agora a rota '/setup' do seu ficheiro app.py e publique novamente.</p>", 200
-
-    except Exception as e:
-        return f"<h1>Ocorreu um erro durante a configuração:</h1><pre>{e}</pre>", 500
+    # Envolve a consulta em um contexto 'with app.app_context()' para garantir
+    # que a aplicação esteja disponível, especialmente durante a inicialização.
+    with app.app_context():
+        return Usuario.query.get(int(user_id))
 
 
 # --- ROTAS DE AUTENTICAÇÃO ---
