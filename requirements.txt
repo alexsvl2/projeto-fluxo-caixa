@@ -2,3 +2,4 @@ Flask
 gunicorn
 Flask-Login
 werkzeug
+click
