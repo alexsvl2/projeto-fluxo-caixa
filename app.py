@@ -43,10 +43,11 @@ class Transacao(db.Model):
 # --- FUNÇÃO DE CARREGAMENTO DE UTILIZADOR ---
 @login_manager.user_loader
 def load_user(user_id):
-    # Envolve a consulta em um contexto 'with app.app_context()' para garantir
-    # que a aplicação esteja disponível, especialmente durante a inicialização.
-    with app.app_context():
-        return Usuario.query.get(int(user_id))
+    # --- TRECHO MODIFICADO ---
+    # Simplificamos a função. O 'with app.app_context()' foi removido,
+    # pois não é necessário aqui e estava a causar o conflito.
+    return Usuario.query.get(int(user_id))
+    # --- FIM DO TRECHO MODIFICADO ---
 
 
 # --- ROTAS DE AUTENTICAÇÃO ---
@@ -83,42 +84,40 @@ def index():
 @app.route('/extrato')
 @login_required
 def extrato():
-    try:
-        periodo = request.args.get('periodo', 'mes_atual')
-        today = date.today()
+    # Removemos o bloco try/except, pois o erro foi corrigido.
+    periodo = request.args.get('periodo', 'mes_atual')
+    today = date.today()
 
-        query = Transacao.query
+    query = Transacao.query
+    
+    if periodo == 'semana_atual':
+        start_date = today - timedelta(days=today.weekday())
+        query = query.filter(Transacao.data_transacao >= start_date)
+    elif periodo == 'ultimos_7_dias':
+        start_date = today - timedelta(days=6)
+        query = query.filter(Transacao.data_transacao >= start_date)
+    elif periodo == 'ultimos_15_dias':
+        start_date = today - timedelta(days=14)
+        query = query.filter(Transacao.data_transacao >= start_date)
+    elif periodo == 'personalizado':
+        start_date = request.args.get('start_date')
+        end_date = request.args.get('end_date')
+        if start_date and end_date:
+            query = query.filter(Transacao.data_transacao.between(start_date, end_date))
+    else: # mes_atual
+        start_date = today.replace(day=1)
+        query = query.filter(Transacao.data_transacao >= start_date)
         
-        if periodo == 'semana_atual':
-            start_date = today - timedelta(days=today.weekday())
-            query = query.filter(Transacao.data_transacao >= start_date)
-        elif periodo == 'ultimos_7_dias':
-            start_date = today - timedelta(days=6)
-            query = query.filter(Transacao.data_transacao >= start_date)
-        elif periodo == 'ultimos_15_dias':
-            start_date = today - timedelta(days=14)
-            query = query.filter(Transacao.data_transacao >= start_date)
-        elif periodo == 'personalizado':
-            start_date = request.args.get('start_date')
-            end_date = request.args.get('end_date')
-            if start_date and end_date:
-                query = query.filter(Transacao.data_transacao.between(start_date, end_date))
-        else: # mes_atual
-            start_date = today.replace(day=1)
-            query = query.filter(Transacao.data_transacao >= start_date)
-            
-        transacoes = query.order_by(Transacao.data_transacao.desc(), Transacao.id.desc()).all()
-        
-        total_entradas_periodo = sum(t.valor for t in transacoes if t.tipo == 'entrada')
-        total_saidas_periodo = sum(t.valor for t in transacoes if t.tipo == 'saida')
-        saldo_periodo = total_entradas_periodo - total_saidas_periodo
-        
-        return render_template('extrato.html', transacoes=transacoes, periodo_selecionado=periodo,
-                               start_date=request.args.get('start_date', ''), end_date=request.args.get('end_date', ''),
-                               saldo_periodo=saldo_periodo, total_entradas_periodo=total_entradas_periodo, total_saidas_periodo=total_saidas_periodo)
-    except Exception as e:
-        # Retorna o erro exato no navegador para nos ajudar a depurar.
-        return f"<h1>Ocorreu um erro na rota de extrato:</h1><pre>{e}</pre>", 500
+    transacoes = query.order_by(Transacao.data_transacao.desc(), Transacao.id.desc()).all()
+    
+    total_entradas_periodo = sum(t.valor for t in transacoes if t.tipo == 'entrada')
+    total_saidas_periodo = sum(t.valor for t in transacoes if t.tipo == 'saida')
+    saldo_periodo = total_entradas_periodo - total_saidas_periodo
+    
+    return render_template('extrato.html', transacoes=transacoes, periodo_selecionado=periodo,
+                           start_date=request.args.get('start_date', ''), end_date=request.args.get('end_date', ''),
+                           saldo_periodo=saldo_periodo, total_entradas_periodo=total_entradas_periodo, total_saidas_periodo=total_saidas_periodo)
+
 
 @app.route('/add', methods=['POST'])
 @login_required
