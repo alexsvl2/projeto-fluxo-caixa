@@ -1,134 +1,142 @@
+import sqlite3
 import os
 from datetime import date, timedelta
-from flask import Flask, render_template, request, redirect, url_for, abort
-from sqlalchemy import create_engine, Column, Integer, String, Float, Date, inspect
-from sqlalchemy.orm import sessionmaker
-from sqlalchemy.ext.declarative import declarative_base
+from flask import Flask, render_template, request, redirect, url_for, flash, abort
+from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
+from werkzeug.security import generate_password_hash, check_password_hash
 
 # --- CONFIGURAÇÃO DO APP E BANCO DE DADOS ---
-app = Flask(__name__)
+app = Flask(__name__, instance_relative_config=True)
+app.config['SECRET_KEY'] = 'uma-chave-secreta-muito-dificil-de-adivinhar' # Mude para uma chave sua
 
-# Pega a URL de conexão do banco de dados das variáveis de ambiente da Render
-DATABASE_URL = os.environ.get('DATABASE_URL')
-if DATABASE_URL is None:
-    raise ValueError("Variável de ambiente DATABASE_URL não foi definida.")
+RENDER_DATABASE_DIR = '/var/data'
+DATABASE = os.path.join(RENDER_DATABASE_DIR, 'fluxo_caixa.db')
 
-# Corrige a URL do PostgreSQL para SQLAlchemy
-if DATABASE_URL.startswith("postgres://"):
-    DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
+if not os.path.exists(RENDER_DATABASE_DIR):
+    try:
+        os.makedirs(RENDER_DATABASE_DIR)
+    except OSError:
+        pass
 
-engine = create_engine(DATABASE_URL)
-SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-Base = declarative_base()
+# --- CONFIGURAÇÃO DO FLASK-LOGIN ---
+login_manager = LoginManager()
+login_manager.init_app(app)
+login_manager.login_view = 'login' # Redireciona para a rota 'login' se o usuário não estiver logado
+login_manager.login_message = "Por favor, faça o login para acessar esta página."
+login_manager.login_message_category = "info"
 
-# --- MODELO DA TABELA (DEFINIDO COM SQLAlchemy) ---
-class Transacao(Base):
-    __tablename__ = "transacoes"
-    id = Column(Integer, primary_key=True, index=True)
-    data_transacao = Column(Date, nullable=False)
-    tipo = Column(String, nullable=False)
-    descricao = Column(String, nullable=False)
-    valor = Column(Float, nullable=False)
+class User(UserMixin):
+    def __init__(self, id, username, password):
+        self.id = id
+        self.username = username
+        self.password = password
 
-# --- TRECHO MODIFICADO: INICIALIZAÇÃO AUTOMÁTICA ---
-def init_db_on_startup():
-    """
-    Verifica se a tabela de transações existe. Se não, cria todas as tabelas.
-    Isso substitui a necessidade do comando 'flask init-db' via shell.
-    """
-    inspector = inspect(engine)
-    if not inspector.has_table("transacoes"):
-        print("Tabela 'transacoes' não encontrada, criando banco de dados...")
-        Base.metadata.create_all(bind=engine)
-        print("Banco de dados inicializado com sucesso.")
-    else:
-        print("Tabela 'transacoes' já existe.")
+@login_manager.user_loader
+def load_user(user_id):
+    conn = sqlite3.connect(DATABASE)
+    conn.row_factory = sqlite3.Row
+    user_data = conn.execute('SELECT * FROM usuarios WHERE id = ?', (user_id,)).fetchone()
+    conn.close()
+    if user_data:
+        return User(id=user_data['id'], username=user_data['username'], password=user_data['password'])
+    return None
 
-# Executa a verificação na inicialização do app
-init_db_on_startup()
-# --- FIM DO TRECHO MODIFICADO ---
+# --- FUNÇÕES DO BANCO DE DADOS ---
+def init_db():
+    conn = sqlite3.connect(DATABASE)
+    with app.open_resource('schema.sql', mode='r') as f:
+        conn.cursor().executescript(f.read())
+    conn.commit()
+    conn.close()
 
+# Comando para inicializar o banco de dados
+@app.cli.command('init-db')
+def init_db_command():
+    init_db()
+    print(f'Banco de dados inicializado em {DATABASE}')
 
-# --- ROTAS DA APLICAÇÃO (sem alterações) ---
+# Comando para criar um novo usuário
+@app.cli.command('create-user')
+@click.argument('username')
+@click.argument('password')
+def create_user_command(username, password):
+    conn = sqlite3.connect(DATABASE)
+    try:
+        conn.execute('INSERT INTO usuarios (username, password) VALUES (?, ?)',
+                     (username, generate_password_hash(password, method='pbkdf2:sha256')))
+        conn.commit()
+        print(f'Usuário "{username}" criado com sucesso.')
+    except sqlite3.IntegrityError:
+        print(f'Erro: Usuário "{username}" já existe.')
+    finally:
+        conn.close()
 
+# --- ROTAS DE AUTENTICAÇÃO ---
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    if current_user.is_authenticated:
+        return redirect(url_for('index'))
+    if request.method == 'POST':
+        username = request.form['username']
+        password = request.form['password']
+        
+        conn = sqlite3.connect(DATABASE)
+        conn.row_factory = sqlite3.Row
+        user_data = conn.execute('SELECT * FROM usuarios WHERE username = ?', (username,)).fetchone()
+        conn.close()
+        
+        if user_data and check_password_hash(user_data['password'], password):
+            user = User(id=user_data['id'], username=user_data['username'], password=user_data['password'])
+            login_user(user)
+            return redirect(url_for('index'))
+        else:
+            flash('Login inválido. Verifique o usuário e a senha.', 'danger')
+            
+    return render_template('login.html')
+
+@app.route('/logout')
+@login_required
+def logout():
+    logout_user()
+    return redirect(url_for('login'))
+
+# --- ROTAS DA APLICAÇÃO (PROTEGIDAS) ---
 @app.route('/')
+@login_required
 def index():
-    session = SessionLocal()
-    transacoes = session.query(Transacao).all()
-    session.close()
-    
-    total_entradas = sum(t.valor for t in transacoes if t.tipo == 'entrada')
-    total_saidas = sum(t.valor for t in transacoes if t.tipo == 'saida')
+    # ... (o restante do código da rota index continua o mesmo)
+    conn = sqlite3.connect(DATABASE)
+    conn.row_factory = sqlite3.Row
+    transacoes = conn.execute('SELECT tipo, valor FROM transacoes').fetchall()
+    conn.close()
+
+    total_entradas = sum(row['valor'] for row in transacoes if row['tipo'] == 'entrada')
+    total_saidas = sum(row['valor'] for row in transacoes if row['tipo'] == 'saida')
     saldo = total_entradas - total_saidas
 
     return render_template('index.html', saldo=saldo, total_entradas=total_entradas, total_saidas=total_saidas)
 
+# Adicione @login_required em todas as rotas que precisam de proteção
 @app.route('/extrato')
+@login_required
 def extrato():
-    session = SessionLocal()
-    periodo = request.args.get('periodo', 'mes_atual')
-    today = date.today()
-    
-    if periodo == 'semana_atual':
-        start_date, end_date = today - timedelta(days=today.weekday()), today + timedelta(days=6-today.weekday())
-    elif periodo == 'ultimos_7_dias':
-        start_date, end_date = today - timedelta(days=6), today
-    elif periodo == 'ultimos_15_dias':
-        start_date, end_date = today - timedelta(days=14), today
-    elif periodo == 'personalizado':
-        start_date, end_date = request.args.get('start_date'), request.args.get('end_date')
-        if not start_date or not end_date:
-            return redirect(url_for('extrato', periodo='mes_atual'))
-    else: # mes_atual ou padrão
-        start_date = today.replace(day=1)
-        end_date = (start_date + timedelta(days=32)).replace(day=1) - timedelta(days=1)
-    
-    transacoes = session.query(Transacao).filter(Transacao.data_transacao.between(start_date, end_date)).order_by(Transacao.data_transacao.desc(), Transacao.id.desc()).all()
-    session.close()
-    
-    return render_template('extrato.html', transacoes=transacoes, periodo_selecionado=periodo, start_date=request.args.get('start_date', ''), end_date=request.args.get('end_date', ''))
+    # ...
+    return render_template('extrato.html', ...)
 
 @app.route('/add', methods=['POST'])
+@login_required
 def add_transacao():
-    session = SessionLocal()
-    nova_transacao = Transacao(
-        data_transacao=date.fromisoformat(request.form.get('data_transacao') or date.today().isoformat()),
-        tipo=request.form['tipo'],
-        descricao=request.form['descricao'],
-        valor=float(request.form['valor'])
-    )
-    session.add(nova_transacao)
-    session.commit()
-    session.close()
+    # ...
     return redirect(url_for('index'))
 
 @app.route('/<int:id>/edit', methods=['GET', 'POST'])
+@login_required
 def edit_transacao(id):
-    session = SessionLocal()
-    transacao = session.query(Transacao).get(id)
-    if transacao is None:
-        session.close()
-        abort(404)
-
-    if request.method == 'POST':
-        transacao.data_transacao = date.fromisoformat(request.form['data_transacao'])
-        transacao.tipo = request.form['tipo']
-        transacao.descricao = request.form['descricao']
-        transacao.valor = float(request.form['valor'])
-        session.commit()
-        session.close()
-        return redirect(url_for('extrato'))
-    
-    session.close()
-    return render_template('edit.html', transacao=transacao)
+    # ...
+    return render_template('edit.html', ...)
 
 @app.route('/<int:id>/delete', methods=['POST'])
+@login_required
 def delete_transacao(id):
-    session = SessionLocal()
-    transacao = session.query(Transacao).get(id)
-    if transacao:
-        session.delete(transacao)
-        session.commit()
-    session.close()
+    # ...
     return redirect(url_for('extrato'))
-

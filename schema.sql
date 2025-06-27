@@ -1,19 +1,21 @@
--- Apaga as tabelas existentes para garantir uma recriação limpa.
-DROP TABLE IF EXISTS user;
+-- Apaga a tabela 'transacoes' se ela já existir, para garantir uma recriação limpa.
 DROP TABLE IF EXISTS transacoes;
 
--- A tabela de usuários continua igual, para controlar o acesso.
-CREATE TABLE user (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  username TEXT UNIQUE NOT NULL,
-  password TEXT NOT NULL
-);
+-- Apaga a tabela 'usuarios' se ela já existir.
+DROP TABLE IF EXISTS usuarios;
 
--- TRECHO MODIFICADO: A tabela de transações não tem mais a coluna 'user_id'.
+-- Cria a nova tabela 'transacoes' com todas as colunas necessárias.
 CREATE TABLE transacoes (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   data_transacao TEXT NOT NULL,
   tipo TEXT NOT NULL,
   descricao TEXT NOT NULL,
   valor REAL NOT NULL
+);
+
+-- Cria a nova tabela 'usuarios' para o sistema de login.
+CREATE TABLE usuarios (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  username TEXT UNIQUE NOT NULL,
+  password TEXT NOT NULL
 );
