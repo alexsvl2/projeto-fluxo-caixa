@@ -52,13 +52,18 @@ def init_db():
 
 @app.route('/init-db-on-render')
 def init_db_route():
-    init_db()
-    return "Banco de dados inicializado com sucesso!"
+    # --- TRECHO MODIFICADO PARA DEPURAR O ERRO ---
+    try:
+        init_db()
+        return "Banco de dados inicializado com sucesso!"
+    except Exception as e:
+        # Retorna o erro exato no navegador para descobrirmos a causa.
+        return f"<h1>Ocorreu um erro ao inicializar o banco de dados:</h1><pre>{e}</pre>", 500
+    # --- FIM DO TRECHO MODIFICADO ---
 
 @app.route('/criar-primeiro-usuario/<username>/<password>')
 def criar_primeiro_usuario(username, password):
     conn = sqlite3.connect(DATABASE)
-    # Verifica se já existe algum usuário para evitar múltiplos usuários de teste
     user_count = conn.execute('SELECT COUNT(id) FROM usuarios').fetchone()[0]
     if user_count > 0:
         # Permite criar mais de um usuário, mas avisa
