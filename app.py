@@ -1,16 +1,20 @@
-import sqlite3
 import os
 from datetime import date, timedelta
 from flask import Flask, render_template, request, redirect, url_for, flash, abort
+from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
 from werkzeug.security import generate_password_hash, check_password_hash
 
-# --- CONFIGURAÇÃO DO APP E BANCO DE DADOS ---
+# --- CONFIGURAÇÃO INICIAL ---
 app = Flask(__name__)
+
+# --- CONFIGURAÇÃO DO BANCO DE DADOS E DA APP ---
+# A URL do banco de dados será lida de uma variável de ambiente na Render
+app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL')
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['SECRET_KEY'] = 'uma-chave-secreta-muito-dificil-de-adivinhar'
 
-RENDER_DATABASE_DIR = '/var/data'
-DATABASE = os.path.join(RENDER_DATABASE_DIR, 'fluxo_caixa.db')
+db = SQLAlchemy(app)
 
 # --- CONFIGURAÇÃO DO FLASK-LOGIN ---
 login_manager = LoginManager()
@@ -19,78 +23,56 @@ login_manager.login_view = 'login'
 login_manager.login_message = "Por favor, faça o login para acessar esta página."
 login_manager.login_message_category = "info"
 
-class User(UserMixin):
-    def __init__(self, id, username, password):
-        self.id = id
-        self.username = username
-        self.password = password
 
+# --- MODELOS DO BANCO DE DADOS (TABELAS) ---
+class Usuario(db.Model, UserMixin):
+    __tablename__ = 'usuarios'
+    id = db.Column(db.Integer, primary_key=True)
+    username = db.Column(db.String(80), unique=True, nullable=False)
+    password = db.Column(db.String(200), nullable=False)
+
+class Transacao(db.Model):
+    __tablename__ = 'transacoes'
+    id = db.Column(db.Integer, primary_key=True)
+    data_transacao = db.Column(db.Date, nullable=False, default=date.today)
+    tipo = db.Column(db.String(10), nullable=False)
+    descricao = db.Column(db.String(200), nullable=False)
+    valor = db.Column(db.Float, nullable=False)
+
+
+# --- FUNÇÃO DE CARREGAMENTO DE UTILIZADOR ---
 @login_manager.user_loader
 def load_user(user_id):
-    if not os.path.exists(DATABASE):
-        return None
-    conn = sqlite3.connect(DATABASE)
-    conn.row_factory = sqlite3.Row
-    user_data = conn.execute('SELECT * FROM usuarios WHERE id = ?', (user_id,)).fetchone()
-    conn.close()
-    if user_data:
-        return User(id=user_data['id'], username=user_data['username'], password=user_data['password'])
-    return None
+    return Usuario.query.get(int(user_id))
 
-# --- ROTA DE SETUP E DIAGNÓSTICO (TEMPORÁRIA) ---
+
+# --- ROTA DE SETUP (TEMPORÁRIA) ---
 @app.route('/setup/<username>/<password>')
 def setup_route(username, password):
     """
-    Esta rota inicializa o banco de dados, cria o primeiro usuário e fornece um diagnóstico detalhado.
+    Esta rota inicializa o banco de dados e cria o primeiro usuário.
     Deve ser usada apenas uma vez e depois removida por segurança.
     """
-    messages = []
     try:
-        messages.append("Iniciando a rota de configuração...")
-        messages.append(f"Caminho do banco de dados definido como: {DATABASE}")
+        # Cria todas as tabelas com base nos modelos definidos acima
+        with app.app_context():
+            db.create_all()
 
-        dir_path = os.path.dirname(DATABASE)
-        messages.append(f"Verificando a existência do diretório: {dir_path}")
-        if os.path.exists(dir_path):
-             messages.append("[SUCESSO] Diretório existe.")
-        else:
-            messages.append(f"[AVISO] O diretório {dir_path} não existe. A conexão SQLite pode falhar.")
-
-        messages.append("Tentando conectar ao banco de dados...")
-        conn = sqlite3.connect(DATABASE)
-        messages.append("[SUCESSO] Conexão com o banco de dados bem-sucedida.")
+        # Verifica se já existe algum usuário
+        if Usuario.query.first():
+            return "Erro: Um usuário já existe. A configuração já foi executada.", 403
         
-        messages.append("Tentando ler o ficheiro schema.sql...")
-        with app.open_resource('schema.sql', mode='r') as f:
-            schema_content = f.read()
-        messages.append("[SUCESSO] schema.sql lido com sucesso.")
-
-        messages.append("Executando o script do schema (CREATE TABLE IF NOT EXISTS)...")
-        conn.cursor().executescript(schema_content)
-        conn.commit()
-        messages.append("[SUCESSO] Script do schema executado e commitado.")
+        # Cria o novo usuário
+        hashed_password = generate_password_hash(password, method='pbkdf2:sha256')
+        new_user = Usuario(username=username, password=hashed_password)
+        db.session.add(new_user)
+        db.session.commit()
         
-        messages.append("Verificando se já existem utilizadores...")
-        user_count = conn.execute('SELECT COUNT(id) FROM usuarios').fetchone()[0]
-        if user_count == 0:
-            messages.append("Nenhum utilizador encontrado. Criando novo utilizador...")
-            hashed_password = generate_password_hash(password, method='pbkdf2:sha256')
-            conn.execute('INSERT INTO usuarios (username, password) VALUES (?, ?)', (username, hashed_password))
-            conn.commit()
-            messages.append(f"[SUCESSO] Utilizador '{username}' criado e commitado.")
-        else:
-            messages.append("Utilizadores já existem. Nenhum novo utilizador foi criado.")
-            
-        conn.close()
-        messages.append("\nConfiguração concluída com sucesso!")
-        messages.append("IMPORTANTE: Remova agora a rota '/setup' do seu ficheiro app.py e publique novamente.")
-        
-        return "<h1>Resultados da Configuração</h1><pre>" + "\n".join(messages) + "</pre>", 200
+        return f"<h1>Configuração Concluída</h1><p>Banco de dados inicializado e usuário '{username}' criado com sucesso!</p><p><b>IMPORTANTE:</b> Remova agora a rota '/setup' do seu ficheiro app.py e publique novamente.</p>", 200
 
     except Exception as e:
-        messages.append(f"\n[ERRO] Uma exceção ocorreu durante a configuração.")
-        messages.append(f"Detalhes do erro: {e}")
-        return "<h1>Resultados da Configuração</h1><pre>" + "\n".join(messages) + "</pre>", 500
+        return f"<h1>Ocorreu um erro durante a configuração:</h1><pre>{e}</pre>", 500
+
 
 # --- ROTAS DE AUTENTICAÇÃO ---
 @app.route('/login', methods=['GET', 'POST'])
@@ -98,18 +80,8 @@ def login():
     if current_user.is_authenticated:
         return redirect(url_for('index'))
     if request.method == 'POST':
-        if not os.path.exists(DATABASE):
-            flash('O sistema ainda não foi configurado. Por favor, contacte o administrador.', 'warning')
-            return render_template('login.html')
-            
-        username = request.form['username']
-        password = request.form['password']
-        conn = sqlite3.connect(DATABASE)
-        conn.row_factory = sqlite3.Row
-        user_data = conn.execute('SELECT * FROM usuarios WHERE username = ?', (username,)).fetchone()
-        conn.close()
-        if user_data and check_password_hash(user_data['password'], password):
-            user = User(id=user_data['id'], username=user_data['username'], password=user_data['password'])
+        user = Usuario.query.filter_by(username=request.form['username']).first()
+        if user and check_password_hash(user.password, request.form['password']):
             login_user(user)
             return redirect(url_for('index'))
         else:
@@ -122,47 +94,47 @@ def logout():
     logout_user()
     return redirect(url_for('login'))
 
+
 # --- ROTAS DA APLICAÇÃO ---
 @app.route('/')
 @login_required
 def index():
-    conn = sqlite3.connect(DATABASE)
-    conn.row_factory = sqlite3.Row
-    transacoes = conn.execute('SELECT tipo, valor FROM transacoes').fetchall()
-    conn.close()
-    total_entradas = sum(row['valor'] for row in transacoes if row['tipo'] == 'entrada')
-    total_saidas = sum(row['valor'] for row in transacoes if row['tipo'] == 'saida')
+    transacoes = Transacao.query.all()
+    total_entradas = sum(t.valor for t in transacoes if t.tipo == 'entrada')
+    total_saidas = sum(t.valor for t in transacoes if t.tipo == 'saida')
     saldo = total_entradas - total_saidas
     return render_template('index.html', saldo=saldo, total_entradas=total_entradas, total_saidas=total_saidas)
 
 @app.route('/extrato')
 @login_required
 def extrato():
-    conn = sqlite3.connect(DATABASE)
-    conn.row_factory = sqlite3.Row
     periodo = request.args.get('periodo', 'mes_atual')
     today = date.today()
 
+    query = Transacao.query
+    
     if periodo == 'semana_atual':
-        start_date, end_date = today - timedelta(days=today.weekday()), today + timedelta(days=6-today.weekday())
+        start_date = today - timedelta(days=today.weekday())
+        query = query.filter(Transacao.data_transacao >= start_date)
     elif periodo == 'ultimos_7_dias':
-        start_date, end_date = today - timedelta(days=6), today
+        start_date = today - timedelta(days=6)
+        query = query.filter(Transacao.data_transacao >= start_date)
     elif periodo == 'ultimos_15_dias':
-        start_date, end_date = today - timedelta(days=14), today
+        start_date = today - timedelta(days=14)
+        query = query.filter(Transacao.data_transacao >= start_date)
     elif periodo == 'personalizado':
-        start_date, end_date = request.args.get('start_date'), request.args.get('end_date')
-        if not start_date or not end_date:
-            return redirect(url_for('extrato', periodo='mes_atual'))
-    else: 
+        start_date = request.args.get('start_date')
+        end_date = request.args.get('end_date')
+        if start_date and end_date:
+            query = query.filter(Transacao.data_transacao.between(start_date, end_date))
+    else: # mes_atual
         start_date = today.replace(day=1)
-        end_date = (start_date + timedelta(days=32)).replace(day=1) - timedelta(days=1)
+        query = query.filter(Transacao.data_transacao >= start_date)
+        
+    transacoes = query.order_by(Transacao.data_transacao.desc(), Transacao.id.desc()).all()
     
-    query = "SELECT * FROM transacoes WHERE data_transacao BETWEEN ? AND ? ORDER BY data_transacao DESC, id DESC"
-    transacoes = conn.execute(query, (str(start_date), str(end_date))).fetchall()
-    conn.close()
-    
-    total_entradas_periodo = sum(row['valor'] for row in transacoes if row['tipo'] == 'entrada')
-    total_saidas_periodo = sum(row['valor'] for row in transacoes if row['tipo'] == 'saida')
+    total_entradas_periodo = sum(t.valor for t in transacoes if t.tipo == 'entrada')
+    total_saidas_periodo = sum(t.valor for t in transacoes if t.tipo == 'saida')
     saldo_periodo = total_entradas_periodo - total_saidas_periodo
     
     return render_template('extrato.html', transacoes=transacoes, periodo_selecionado=periodo,
@@ -172,42 +144,34 @@ def extrato():
 @app.route('/add', methods=['POST'])
 @login_required
 def add_transacao():
-    data_transacao = request.form.get('data_transacao') or date.today().strftime('%Y-%m-%d')
-    conn = sqlite3.connect(DATABASE)
-    conn.execute('INSERT INTO transacoes (data_transacao, tipo, descricao, valor) VALUES (?, ?, ?, ?)',
-                 (data_transacao, request.form['tipo'], request.form['descricao'], float(request.form['valor'])))
-    conn.commit()
-    conn.close()
+    data_str = request.form.get('data_transacao')
+    nova_transacao = Transacao(
+        data_transacao=date.fromisoformat(data_str) if data_str else date.today(),
+        tipo=request.form['tipo'],
+        descricao=request.form['descricao'],
+        valor=float(request.form['valor'])
+    )
+    db.session.add(nova_transacao)
+    db.session.commit()
     return redirect(url_for('index'))
-
-def get_transacao(transacao_id):
-    conn = sqlite3.connect(DATABASE)
-    conn.row_factory = sqlite3.Row
-    transacao = conn.execute('SELECT * FROM transacoes WHERE id = ?', (transacao_id,)).fetchone()
-    conn.close()
-    if transacao is None:
-        abort(404)
-    return transacao
 
 @app.route('/<int:id>/edit', methods=['GET', 'POST'])
 @login_required
 def edit_transacao(id):
-    transacao = get_transacao(id)
+    transacao = Transacao.query.get_or_404(id)
     if request.method == 'POST':
-        conn = sqlite3.connect(DATABASE)
-        conn.execute('UPDATE transacoes SET data_transacao = ?, tipo = ?, descricao = ?, valor = ? WHERE id = ?',
-                     (request.form['data_transacao'], request.form['tipo'], request.form['descricao'], float(request.form['valor']), id))
-        conn.commit()
-        conn.close()
+        transacao.data_transacao = date.fromisoformat(request.form['data_transacao'])
+        transacao.tipo = request.form['tipo']
+        transacao.descricao = request.form['descricao']
+        transacao.valor = float(request.form['valor'])
+        db.session.commit()
         return redirect(url_for('extrato'))
     return render_template('edit.html', transacao=transacao)
 
 @app.route('/<int:id>/delete', methods=['POST'])
 @login_required
 def delete_transacao(id):
-    get_transacao(id)
-    conn = sqlite3.connect(DATABASE)
-    conn.execute('DELETE FROM transacoes WHERE id = ?', (id,))
-    conn.commit()
-    conn.close()
+    transacao = Transacao.query.get_or_404(id)
+    db.session.delete(transacao)
+    db.session.commit()
     return redirect(url_for('extrato'))
