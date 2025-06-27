@@ -4,7 +4,7 @@ DROP TABLE IF EXISTS transacoes;
 -- Apaga a tabela 'usuarios' se ela já existir.
 DROP TABLE IF EXISTS usuarios;
 
--- Cria a nova tabela 'transacoes' com todas as colunas necessárias.
+-- Cria a nova tabela 'transacoes' sem a coluna user_id
 CREATE TABLE transacoes (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   data_transacao TEXT NOT NULL,
