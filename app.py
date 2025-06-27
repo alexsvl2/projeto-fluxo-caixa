@@ -6,14 +6,11 @@ from flask_login import LoginManager, UserMixin, login_user, login_required, log
 from werkzeug.security import generate_password_hash, check_password_hash
 
 # --- CONFIGURAÇÃO DO APP E BANCO DE DADOS ---
-app = Flask(__name__, instance_relative_config=True)
+app = Flask(__name__)
 app.config['SECRET_KEY'] = 'uma-chave-secreta-muito-dificil-de-adivinhar'
 
-# --- TRECHO MODIFICADO ---
-# Apenas definimos o caminho. Não tentamos mais criar o diretório aqui.
 RENDER_DATABASE_DIR = '/var/data'
 DATABASE = os.path.join(RENDER_DATABASE_DIR, 'fluxo_caixa.db')
-# --- FIM DO TRECHO MODIFICADO ---
 
 # --- CONFIGURAÇÃO DO FLASK-LOGIN ---
 login_manager = LoginManager()
@@ -40,41 +37,35 @@ def load_user(user_id):
         return User(id=user_data['id'], username=user_data['username'], password=user_data['password'])
     return None
 
-# --- FUNÇÕES DO BANCO DE DADOS E ROTAS TEMPORÁRIAS ---
-def init_db():
-    # A linha os.makedirs foi removida. Apenas conectamos diretamente.
-    conn = sqlite3.connect(DATABASE)
-    with app.open_resource('schema.sql', mode='r') as f:
-        conn.cursor().executescript(f.read())
-    conn.commit()
-    conn.close()
-
-@app.route('/init-db-on-render')
-def init_db_route():
+# --- ROTA DE SETUP (TEMPORÁRIA) ---
+@app.route('/setup/<username>/<password>')
+def setup_route(username, password):
+    """
+    Esta rota inicializa o banco de dados e cria o primeiro usuário.
+    Deve ser usada apenas uma vez e depois removida por segurança.
+    """
     try:
-        init_db()
-        return "<h1>Sucesso!</h1><p>O banco de dados foi inicializado corretamente.</p>"
-    except Exception as e:
-        return f"<h1>Ocorreu um erro ao inicializar o banco de dados:</h1><pre>{e}</pre>", 500
-
-@app.route('/criar-primeiro-usuario/<username>/<password>')
-def criar_primeiro_usuario(username, password):
-    conn = sqlite3.connect(DATABASE)
-    user_count = conn.execute('SELECT COUNT(id) FROM usuarios').fetchone()[0]
-    if user_count > 0:
-        pass
-
-    hashed_password = generate_password_hash(password, method='pbkdf2:sha256')
-    try:
-        conn.execute('INSERT INTO usuarios (username, password) VALUES (?, ?)', (username, hashed_password))
+        # Passo 1: Inicializar o banco de dados
+        conn = sqlite3.connect(DATABASE)
+        with app.open_resource('schema.sql', mode='r') as f:
+            conn.cursor().executescript(f.read())
         conn.commit()
-        message = f"Usuário '{username}' criado com sucesso!"
-    except sqlite3.IntegrityError:
-        message = f"Erro: Usuário '{username}' já existe."
-    finally:
+        
+        # Passo 2: Criar o primeiro usuário, se não houver nenhum
+        user_count = conn.execute('SELECT COUNT(id) FROM usuarios').fetchone()[0]
+        if user_count == 0:
+            hashed_password = generate_password_hash(password, method='pbkdf2:sha256')
+            conn.execute('INSERT INTO usuarios (username, password) VALUES (?, ?)', (username, hashed_password))
+            conn.commit()
+            message = f"Banco de dados inicializado e usuário '{username}' criado com sucesso!"
+        else:
+            message = "Banco de dados já estava inicializado. Nenhum novo usuário foi criado."
+            
         conn.close()
-    
-    return message + " Lembre-se de remover esta rota do seu app.py por segurança."
+        return f"<h1>Configuração Concluída</h1><p>{message}</p><p><b>IMPORTANTE:</b> Remova agora a rota '/setup' do seu ficheiro app.py e publique novamente.</p>", 200
+
+    except Exception as e:
+        return f"<h1>Ocorreu um erro durante a configuração:</h1><pre>{e}</pre>", 500
 
 # --- ROTAS DE AUTENTICAÇÃO ---
 @app.route('/login', methods=['GET', 'POST'])
@@ -82,12 +73,13 @@ def login():
     if current_user.is_authenticated:
         return redirect(url_for('index'))
     if request.method == 'POST':
-        username = request.form['username']
-        password = request.form['password']
+        # Verifica se o DB existe antes de tentar o login
         if not os.path.exists(DATABASE):
-            flash('O sistema ainda não foi inicializado. Por favor, contacte o administrador.', 'warning')
+            flash('O sistema ainda não foi configurado. Por favor, contacte o administrador.', 'warning')
             return render_template('login.html')
             
+        username = request.form['username']
+        password = request.form['password']
         conn = sqlite3.connect(DATABASE)
         conn.row_factory = sqlite3.Row
         user_data = conn.execute('SELECT * FROM usuarios WHERE username = ?', (username,)).fetchone()
@@ -107,6 +99,8 @@ def logout():
     return redirect(url_for('login'))
 
 # --- ROTAS DA APLICAÇÃO ---
+# (As rotas / , /extrato, /add, /edit, /delete continuam exatamente as mesmas da versão anterior)
+
 @app.route('/')
 @login_required
 def index():
