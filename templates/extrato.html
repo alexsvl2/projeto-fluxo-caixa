@@ -4,21 +4,52 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Extrato - Fluxo de Caixa</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='dashboard.css') }}">
-    <link rel="stylesheet" href="{{ url_for('static', filename='extrato.css') }}">
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; color: #333; background-color: #f0f2f5; }
+        .container { max-width: 900px; margin: auto; background: #fff; padding: 20px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+        h1, h2 { color: #0056b3; }
+        a { color: #007bff; text-decoration: none; }
+        a:hover { text-decoration: underline; }
+        
+        .btn { padding: 8px 12px; background-color: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer; text-decoration: none; display: inline-block; font-size: 14px; text-align: center; }
+        .btn:hover { background-color: #0056b3; }
+        .btn-delete { background-color: #dc3545; }
+        .btn-delete:hover { background-color: #c82333; }
+        .btn-secondary { background-color: #6c757d; }
+        .btn-secondary:hover { background-color: #5a6268; }
+
+        /* Estilos para o saldo do período */
+        .saldo-container { padding: 15px; background: #eef; border-radius: 5px; text-align: center; margin-bottom: 20px; }
+        .saldo { font-size: 2em; font-weight: bold; }
+        .saldo.positivo { color: #28a745; }
+        .saldo.negativo { color: #dc3545; }
+        .totais { display: flex; justify-content: space-around; margin-top: 10px; }
+        .entradas { color: #28a745; }
+        .saidas { color: #dc3545; }
+
+        /* Filtros */
+        .filter-form { background-color: #eef; padding: 15px; border-radius: 8px; margin-bottom: 20px; display: flex; flex-wrap: wrap; gap: 15px; align-items: flex-end; }
+        .filter-form label { font-weight: bold; margin-bottom: 5px; display: block; }
+        .filter-form select, .filter-form input[type="date"] { padding: 8px; border: 1px solid #ccc; border-radius: 4px; }
+        .filter-form .btn { align-self: flex-end; }
+        #custom-range { display: none; gap: 15px; }
+
+        /* Tabela */
+        table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+        th, td { border: 1px solid #ddd; padding: 10px; text-align: left; vertical-align: middle; }
+        th { background-color: #f2f2f2; }
+        .tipo-entrada { color: #28a745; }
+        .tipo-saida { color: #dc3545; }
+        .actions-cell { display: flex; gap: 5px; align-items: center; }
+        .actions-cell form { margin: 0; }
+    </style>
 </head>
 <body>
-    <div class="app-container">
-        <header class="app-header">
-            <div class="user-info">
-                Olá, <strong>{{ g.user['username'] }}</strong>
-            </div>
-            <a href="{{ url_for('logout') }}" class="btn btn-logout">Sair</a>
-        </header>
-        
+    <div class="container">
         <h1>Extrato de Transações</h1>
-        <p style="text-align:center;"><a href="{{ url_for('index') }}">&larr; Voltar para a Página Principal</a></p>
+        <p><a href="{{ url_for('index') }}">&larr; Voltar para a Página Principal</a></p>
 
+        <!-- Container com saldo do período -->
         <div class="saldo-container">
             <h2>Resumo do Período</h2>
             <div class="saldo {{ 'positivo' if saldo_periodo >= 0 else 'negativo' }}">
@@ -30,6 +61,7 @@
             </div>
         </div>
 
+        <!-- Formulário de Filtros -->
         <form class="filter-form" method="get" action="{{ url_for('extrato') }}">
             <div>
                 <label for="periodo">Filtrar por Período</label>
@@ -54,40 +86,39 @@
             <button type="submit" class="btn">Filtrar</button>
         </form>
 
-        <div class="table-container">
-            <h2>Histórico do Período</h2>
-            <table>
-                <thead>
-                    <tr>
-                        <th>Data</th>
-                        <th>Descrição</th>
-                        <th>Valor (R$)</th>
-                        <th>Tipo</th>
-                        <th>Ações</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for transacao in transacoes %}
-                    <tr>
-                        <td>{{ transacao.data_transacao }}</td>
-                        <td>{{ transacao.descricao }}</td>
-                        <td class="{{ 'tipo-entrada' if transacao.tipo == 'entrada' else 'tipo-saida' }}">
-                            {{ "%.2f"|format(transacao.valor) }}
-                        </td>
-                        <td class="{{ 'tipo-entrada' if transacao.tipo == 'entrada' else 'tipo-saida' }}">
-                            {{ transacao.tipo.capitalize() }}
-                        </td>
-                        <td class="actions-cell">
-                            <a href="{{ url_for('edit_transacao', id=transacao.id) }}" class="btn">Editar</a>
-                            <form action="{{ url_for('delete_transacao', id=transacao.id) }}" method="post" onsubmit="return confirm('Tem certeza que deseja apagar esta transação?');">
-                                <button type="submit" class="btn btn-delete">Apagar</button>
-                            </form>
-                        </td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-        </div>
+        <!-- Tabela de Histórico -->
+        <h2>Histórico do Período</h2>
+        <table>
+            <thead>
+                <tr>
+                    <th>Data</th>
+                    <th>Descrição</th>
+                    <th>Valor (R$)</th>
+                    <th>Tipo</th>
+                    <th>Ações</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for transacao in transacoes %}
+                <tr>
+                    <td>{{ transacao.data_transacao }}</td>
+                    <td>{{ transacao.descricao }}</td>
+                    <td class="{{ 'tipo-entrada' if transacao.tipo == 'entrada' else 'tipo-saida' }}">
+                        {{ "%.2f"|format(transacao.valor) }}
+                    </td>
+                    <td class="{{ 'tipo-entrada' if transacao.tipo == 'entrada' else 'tipo-saida' }}">
+                        {{ transacao.tipo.capitalize() }}
+                    </td>
+                    <td class="actions-cell">
+                        <a href="{{ url_for('edit_transacao', id=transacao.id) }}" class="btn">Editar</a>
+                        <form action="{{ url_for('delete_transacao', id=transacao.id) }}" method="post" onsubmit="return confirm('Tem certeza que deseja apagar esta transação?');">
+                            <button type="submit" class="btn btn-delete">Apagar</button>
+                        </form>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
     </div>
 
     <script>
