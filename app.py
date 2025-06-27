@@ -37,35 +37,60 @@ def load_user(user_id):
         return User(id=user_data['id'], username=user_data['username'], password=user_data['password'])
     return None
 
-# --- ROTA DE SETUP (TEMPORÁRIA) ---
+# --- ROTA DE SETUP E DIAGNÓSTICO (TEMPORÁRIA) ---
 @app.route('/setup/<username>/<password>')
 def setup_route(username, password):
     """
-    Esta rota inicializa o banco de dados e cria o primeiro usuário.
+    Esta rota inicializa o banco de dados, cria o primeiro usuário e fornece um diagnóstico detalhado.
     Deve ser usada apenas uma vez e depois removida por segurança.
     """
+    messages = []
     try:
-        # Passo 1: Inicializar o banco de dados
+        messages.append("Iniciando a rota de configuração...")
+        messages.append(f"Caminho do banco de dados definido como: {DATABASE}")
+
+        dir_path = os.path.dirname(DATABASE)
+        messages.append(f"Verificando a existência do diretório: {dir_path}")
+        if os.path.exists(dir_path):
+             messages.append("[SUCESSO] Diretório existe.")
+        else:
+            messages.append(f"[AVISO] O diretório {dir_path} não existe. A conexão SQLite pode falhar.")
+
+        messages.append("Tentando conectar ao banco de dados...")
         conn = sqlite3.connect(DATABASE)
-        with app.open_resource('schema.sql', mode='r') as f:
-            conn.cursor().executescript(f.read())
-        conn.commit()
+        messages.append("[SUCESSO] Conexão com o banco de dados bem-sucedida.")
         
-        # Passo 2: Criar o primeiro usuário, se não houver nenhum
+        messages.append("Tentando ler o ficheiro schema.sql...")
+        with app.open_resource('schema.sql', mode='r') as f:
+            schema_content = f.read()
+        messages.append("[SUCESSO] schema.sql lido com sucesso.")
+
+        messages.append("Executando o script do schema (CREATE TABLE IF NOT EXISTS)...")
+        conn.cursor().executescript(schema_content)
+        conn.commit()
+        messages.append("[SUCESSO] Script do schema executado e commitado.")
+        
+        messages.append("Verificando se já existem utilizadores...")
         user_count = conn.execute('SELECT COUNT(id) FROM usuarios').fetchone()[0]
         if user_count == 0:
+            messages.append("Nenhum utilizador encontrado. Criando novo utilizador...")
             hashed_password = generate_password_hash(password, method='pbkdf2:sha256')
             conn.execute('INSERT INTO usuarios (username, password) VALUES (?, ?)', (username, hashed_password))
             conn.commit()
-            message = f"Banco de dados inicializado e usuário '{username}' criado com sucesso!"
+            messages.append(f"[SUCESSO] Utilizador '{username}' criado e commitado.")
         else:
-            message = "Banco de dados já estava inicializado. Nenhum novo usuário foi criado."
+            messages.append("Utilizadores já existem. Nenhum novo utilizador foi criado.")
             
         conn.close()
-        return f"<h1>Configuração Concluída</h1><p>{message}</p><p><b>IMPORTANTE:</b> Remova agora a rota '/setup' do seu ficheiro app.py e publique novamente.</p>", 200
+        messages.append("\nConfiguração concluída com sucesso!")
+        messages.append("IMPORTANTE: Remova agora a rota '/setup' do seu ficheiro app.py e publique novamente.")
+        
+        return "<h1>Resultados da Configuração</h1><pre>" + "\n".join(messages) + "</pre>", 200
 
     except Exception as e:
-        return f"<h1>Ocorreu um erro durante a configuração:</h1><pre>{e}</pre>", 500
+        messages.append(f"\n[ERRO] Uma exceção ocorreu durante a configuração.")
+        messages.append(f"Detalhes do erro: {e}")
+        return "<h1>Resultados da Configuração</h1><pre>" + "\n".join(messages) + "</pre>", 500
 
 # --- ROTAS DE AUTENTICAÇÃO ---
 @app.route('/login', methods=['GET', 'POST'])
@@ -73,7 +98,6 @@ def login():
     if current_user.is_authenticated:
         return redirect(url_for('index'))
     if request.method == 'POST':
-        # Verifica se o DB existe antes de tentar o login
         if not os.path.exists(DATABASE):
             flash('O sistema ainda não foi configurado. Por favor, contacte o administrador.', 'warning')
             return render_template('login.html')
@@ -99,8 +123,6 @@ def logout():
     return redirect(url_for('login'))
 
 # --- ROTAS DA APLICAÇÃO ---
-# (As rotas / , /extrato, /add, /edit, /delete continuam exatamente as mesmas da versão anterior)
-
 @app.route('/')
 @login_required
 def index():
