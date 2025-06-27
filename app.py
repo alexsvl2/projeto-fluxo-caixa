@@ -13,12 +13,6 @@ app.config['SECRET_KEY'] = 'uma-chave-secreta-muito-dificil-de-adivinhar'
 RENDER_DATABASE_DIR = '/var/data'
 DATABASE = os.path.join(RENDER_DATABASE_DIR, 'fluxo_caixa.db')
 
-if not os.path.exists(RENDER_DATABASE_DIR):
-    try:
-        os.makedirs(RENDER_DATABASE_DIR)
-    except OSError:
-        pass
-
 # --- CONFIGURAÇÃO DO FLASK-LOGIN ---
 login_manager = LoginManager()
 login_manager.init_app(app)
@@ -34,6 +28,9 @@ class User(UserMixin):
 
 @login_manager.user_loader
 def load_user(user_id):
+    # A verificação da existência do ficheiro de DB previne erros se a app iniciar antes do DB ser criado
+    if not os.path.exists(DATABASE):
+        return None
     conn = sqlite3.connect(DATABASE)
     conn.row_factory = sqlite3.Row
     user_data = conn.execute('SELECT * FROM usuarios WHERE id = ?', (user_id,)).fetchone()
@@ -44,7 +41,11 @@ def load_user(user_id):
 
 # --- FUNÇÕES DO BANCO DE DADOS E ROTAS TEMPORÁRIAS ---
 def init_db():
+    # --- TRECHO MODIFICADO ---
+    # Garante que o diretório do banco de dados exista antes de tentar conectar
+    os.makedirs(os.path.dirname(DATABASE), exist_ok=True)
     conn = sqlite3.connect(DATABASE)
+    # --- FIM DO TRECHO MODIFICADO ---
     with app.open_resource('schema.sql', mode='r') as f:
         conn.cursor().executescript(f.read())
     conn.commit()
@@ -52,21 +53,17 @@ def init_db():
 
 @app.route('/init-db-on-render')
 def init_db_route():
-    # --- TRECHO MODIFICADO PARA DEPURAR O ERRO ---
     try:
         init_db()
-        return "Banco de dados inicializado com sucesso!"
+        return "<h1>Sucesso!</h1><p>O banco de dados foi inicializado corretamente.</p>"
     except Exception as e:
-        # Retorna o erro exato no navegador para descobrirmos a causa.
         return f"<h1>Ocorreu um erro ao inicializar o banco de dados:</h1><pre>{e}</pre>", 500
-    # --- FIM DO TRECHO MODIFICADO ---
 
 @app.route('/criar-primeiro-usuario/<username>/<password>')
 def criar_primeiro_usuario(username, password):
     conn = sqlite3.connect(DATABASE)
     user_count = conn.execute('SELECT COUNT(id) FROM usuarios').fetchone()[0]
     if user_count > 0:
-        # Permite criar mais de um usuário, mas avisa
         pass
 
     hashed_password = generate_password_hash(password, method='pbkdf2:sha256')
@@ -89,6 +86,11 @@ def login():
     if request.method == 'POST':
         username = request.form['username']
         password = request.form['password']
+        # Verifica se o DB existe antes de tentar conectar
+        if not os.path.exists(DATABASE):
+            flash('O sistema ainda não foi inicializado. Por favor, contacte o administrador.', 'warning')
+            return render_template('login.html')
+            
         conn = sqlite3.connect(DATABASE)
         conn.row_factory = sqlite3.Row
         user_data = conn.execute('SELECT * FROM usuarios WHERE username = ?', (username,)).fetchone()
@@ -146,7 +148,6 @@ def extrato():
     transacoes = conn.execute(query, (str(start_date), str(end_date))).fetchall()
     conn.close()
     
-    # Calcula os totais apenas para o período filtrado
     total_entradas_periodo = sum(row['valor'] for row in transacoes if row['tipo'] == 'entrada')
     total_saidas_periodo = sum(row['valor'] for row in transacoes if row['tipo'] == 'saida')
     saldo_periodo = total_entradas_periodo - total_saidas_periodo
@@ -198,8 +199,6 @@ def delete_transacao(id):
     conn.close()
     return redirect(url_for('extrato'))
 
-# A parte do 'click' não é mais necessária para o deploy na Render, mas pode ser mantida
-# para uso local. Apenas garanta que 'click' está em requirements.txt.
 @app.cli.command('create-user-local')
 @click.argument('username')
 @click.argument('password')
