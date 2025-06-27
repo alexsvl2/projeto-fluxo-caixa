@@ -4,22 +4,24 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Editar Transação</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='dashboard.css') }}">
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; color: #333; }
+        .container { max-width: 800px; margin: auto; background: #f9f9f9; padding: 20px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+        h1 { color: #0056b3; }
+        form { margin-top: 20px; display: flex; flex-direction: column; gap: 10px; }
+        input[type="text"], input[type="number"], input[type="date"] { padding: 8px; border: 1px solid #ccc; border-radius: 4px; }
+        button, .btn { padding: 10px 15px; background-color: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer; text-decoration: none; }
+        button:hover, .btn:hover { background-color: #0056b3; }
+        .btn-secondary { background-color: #6c757d; }
+        .btn-secondary:hover { background-color: #5a6268; }
+    </style>
 </head>
 <body>
-    <div class="app-container">
-        <header class="app-header">
-            <div class="user-info">
-                Olá, <strong>{{ g.user['username'] }}</strong>
-            </div>
-            <a href="{{ url_for('logout') }}" class="btn btn-logout">Sair</a>
-        </header>
-        
+    <div class="container">
         <h1>Editar Transação</h1>
-
-        <form method="post" class="edit-form">
+        <form method="post">
             <label for="data_transacao">Data</label>
-            <input type="date" name="data_transacao" id="data_transacao" value="{{ transacao.data_transacao }}" required>
+            <input type="date" name="data_transacao" id="data_transacao" value="{{ transacao.data_transacao.strftime('%Y-%m-%d') }}" required>
             
             <label for="descricao">Descrição</label>
             <input type="text" name="descricao" id="descricao" value="{{ transacao.descricao }}" required>
@@ -29,13 +31,13 @@
             
             <label>Tipo</label>
             <div>
-                <label class="radio-label"><input type="radio" name="tipo" value="entrada" {% if transacao.tipo == 'entrada' %}checked{% endif %} required> Entrada</label>
-                <label class="radio-label"><input type="radio" name="tipo" value="saida" {% if transacao.tipo == 'saida' %}checked{% endif %}> Saída</label>
+                <label><input type="radio" name="tipo" value="entrada" {% if transacao.tipo == 'entrada' %}checked{% endif %} required> Entrada</label>
+                <label><input type="radio" name="tipo" value="saida" {% if transacao.tipo == 'saida' %}checked{% endif %}> Saída</label>
             </div>
             
-            <button type="submit" class="btn">Salvar Alterações</button>
-            <a href="{{ url_for('extrato') }}" class="btn btn-secondary">Cancelar</a>
+            <button type="submit">Salvar Alterações</button>
         </form>
+        <a href="{{ url_for('extrato') }}" class="btn btn-secondary" style="margin-top: 10px;">Cancelar</a>
     </div>
 </body>
 </html>
