@@ -1,6 +1,5 @@
 import sqlite3
 import os
-import click
 from datetime import date, timedelta
 from flask import Flask, render_template, request, redirect, url_for, flash, abort
 from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
@@ -10,8 +9,11 @@ from werkzeug.security import generate_password_hash, check_password_hash
 app = Flask(__name__, instance_relative_config=True)
 app.config['SECRET_KEY'] = 'uma-chave-secreta-muito-dificil-de-adivinhar'
 
+# --- TRECHO MODIFICADO ---
+# Apenas definimos o caminho. Não tentamos mais criar o diretório aqui.
 RENDER_DATABASE_DIR = '/var/data'
 DATABASE = os.path.join(RENDER_DATABASE_DIR, 'fluxo_caixa.db')
+# --- FIM DO TRECHO MODIFICADO ---
 
 # --- CONFIGURAÇÃO DO FLASK-LOGIN ---
 login_manager = LoginManager()
@@ -28,7 +30,6 @@ class User(UserMixin):
 
 @login_manager.user_loader
 def load_user(user_id):
-    # A verificação da existência do ficheiro de DB previne erros se a app iniciar antes do DB ser criado
     if not os.path.exists(DATABASE):
         return None
     conn = sqlite3.connect(DATABASE)
@@ -41,11 +42,8 @@ def load_user(user_id):
 
 # --- FUNÇÕES DO BANCO DE DADOS E ROTAS TEMPORÁRIAS ---
 def init_db():
-    # --- TRECHO MODIFICADO ---
-    # Garante que o diretório do banco de dados exista antes de tentar conectar
-    os.makedirs(os.path.dirname(DATABASE), exist_ok=True)
+    # A linha os.makedirs foi removida. Apenas conectamos diretamente.
     conn = sqlite3.connect(DATABASE)
-    # --- FIM DO TRECHO MODIFICADO ---
     with app.open_resource('schema.sql', mode='r') as f:
         conn.cursor().executescript(f.read())
     conn.commit()
@@ -86,7 +84,6 @@ def login():
     if request.method == 'POST':
         username = request.form['username']
         password = request.form['password']
-        # Verifica se o DB existe antes de tentar conectar
         if not os.path.exists(DATABASE):
             flash('O sistema ainda não foi inicializado. Por favor, contacte o administrador.', 'warning')
             return render_template('login.html')
@@ -198,19 +195,3 @@ def delete_transacao(id):
     conn.commit()
     conn.close()
     return redirect(url_for('extrato'))
-
-@app.cli.command('create-user-local')
-@click.argument('username')
-@click.argument('password')
-def create_user_local_command(username, password):
-    """Cria um novo usuário localmente."""
-    conn = sqlite3.connect(DATABASE)
-    try:
-        conn.execute('INSERT INTO usuarios (username, password) VALUES (?, ?)',
-                     (username, generate_password_hash(password, method='pbkdf2:sha256')))
-        conn.commit()
-        print(f'Usuário "{username}" criado com sucesso.')
-    except sqlite3.IntegrityError:
-        print(f'Erro: Usuário "{username}" já existe.')
-    finally:
-        conn.close()
