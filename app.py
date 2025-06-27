@@ -81,45 +81,39 @@ def index():
 @app.route('/extrato')
 @login_required
 def extrato():
-    # --- TRECHO MODIFICADO ---
-    try:
-        periodo = request.args.get('periodo', 'mes_atual')
-        today = date.today()
+    periodo = request.args.get('periodo', 'mes_atual')
+    today = date.today()
 
-        query = Transacao.query
+    query = Transacao.query
+    
+    if periodo == 'semana_atual':
+        start_date = today - timedelta(days=today.weekday())
+        query = query.filter(Transacao.data_transacao >= start_date)
+    elif periodo == 'ultimos_7_dias':
+        start_date = today - timedelta(days=6)
+        query = query.filter(Transacao.data_transacao >= start_date)
+    elif periodo == 'ultimos_15_dias':
+        start_date = today - timedelta(days=14)
+        query = query.filter(Transacao.data_transacao >= start_date)
+    elif periodo == 'personalizado':
+        start_date = request.args.get('start_date')
+        end_date = request.args.get('end_date')
+        if start_date and end_date:
+            query = query.filter(Transacao.data_transacao.between(start_date, end_date))
+    else: # mes_atual
+        start_date = today.replace(day=1)
+        query = query.filter(Transacao.data_transacao >= start_date)
         
-        if periodo == 'semana_atual':
-            start_date = today - timedelta(days=today.weekday())
-            query = query.filter(Transacao.data_transacao >= start_date)
-        elif periodo == 'ultimos_7_dias':
-            start_date = today - timedelta(days=6)
-            query = query.filter(Transacao.data_transacao >= start_date)
-        elif periodo == 'ultimos_15_dias':
-            start_date = today - timedelta(days=14)
-            query = query.filter(Transacao.data_transacao >= start_date)
-        elif periodo == 'personalizado':
-            start_date = request.args.get('start_date')
-            end_date = request.args.get('end_date')
-            if start_date and end_date:
-                query = query.filter(Transacao.data_transacao.between(start_date, end_date))
-        else: # mes_atual
-            start_date = today.replace(day=1)
-            query = query.filter(Transacao.data_transacao >= start_date)
-            
-        transacoes = query.order_by(Transacao.data_transacao.desc(), Transacao.id.desc()).all()
-        
-        total_entradas_periodo = sum(t.valor for t in transacoes if t.tipo == 'entrada')
-        total_saidas_periodo = sum(t.valor for t in transacoes if t.tipo == 'saida')
-        saldo_periodo = total_entradas_periodo - total_saidas_periodo
-        
-        return render_template('extrato.html', transacoes=transacoes, periodo_selecionado=periodo,
-                               start_date=request.args.get('start_date', ''), end_date=request.args.get('end_date', ''),
-                               saldo_periodo=saldo_periodo, total_entradas_periodo=total_entradas_periodo, total_saidas_periodo=total_saidas_periodo)
-    except Exception as e:
-        # Retorna o erro exato e o traceback completo para depuração.
-        tb = traceback.format_exc()
-        return f"<h1>Ocorreu um erro na rota de extrato:</h1><pre>{e}\n\n{tb}</pre>", 500
-    # --- FIM DO TRECHO MODIFICADO ---
+    transacoes = query.order_by(Transacao.data_transacao.desc(), Transacao.id.desc()).all()
+    
+    total_entradas_periodo = sum(t.valor for t in transacoes if t.tipo == 'entrada')
+    total_saidas_periodo = sum(t.valor for t in transacoes if t.tipo == 'saida')
+    saldo_periodo = total_entradas_periodo - total_saidas_periodo
+    
+    return render_template('extrato.html', transacoes=transacoes, periodo_selecionado=periodo,
+                           start_date=request.args.get('start_date', ''), end_date=request.args.get('end_date', ''),
+                           saldo_periodo=saldo_periodo, total_entradas_periodo=total_entradas_periodo, total_saidas_periodo=total_saidas_periodo)
+
 
 @app.route('/add', methods=['POST'])
 @login_required
@@ -138,15 +132,22 @@ def add_transacao():
 @app.route('/<int:id>/edit', methods=['GET', 'POST'])
 @login_required
 def edit_transacao(id):
-    transacao = Transacao.query.get_or_404(id)
-    if request.method == 'POST':
-        transacao.data_transacao = date.fromisoformat(request.form['data_transacao'])
-        transacao.tipo = request.form['tipo']
-        transacao.descricao = request.form['descricao']
-        transacao.valor = float(request.form['valor'])
-        db.session.commit()
-        return redirect(url_for('extrato'))
-    return render_template('edit.html', transacao=transacao)
+    # --- TRECHO MODIFICADO ---
+    try:
+        transacao = Transacao.query.get_or_404(id)
+        if request.method == 'POST':
+            transacao.data_transacao = date.fromisoformat(request.form['data_transacao'])
+            transacao.tipo = request.form['tipo']
+            transacao.descricao = request.form['descricao']
+            transacao.valor = float(request.form['valor'])
+            db.session.commit()
+            return redirect(url_for('extrato'))
+        return render_template('edit.html', transacao=transacao)
+    except Exception as e:
+        # Retorna o erro exato e o traceback completo para depuração.
+        tb = traceback.format_exc()
+        return f"<h1>Ocorreu um erro na rota de edição:</h1><pre>{e}\n\n{tb}</pre>", 500
+    # --- FIM DO TRECHO MODIFICADO ---
 
 @app.route('/<int:id>/delete', methods=['POST'])
 @login_required
