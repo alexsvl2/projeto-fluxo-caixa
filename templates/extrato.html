@@ -40,7 +40,7 @@
         th { background-color: #f2f2f2; }
         .tipo-entrada { color: #28a745; }
         .tipo-saida { color: #dc3545; }
-        .tipo-fiado { color: #d46b08; } /* --- TRECHO MODIFICADO --- */
+        .tipo-fiado { color: #d46b08; }
         .actions-cell { display: flex; gap: 5px; align-items: center; }
         .actions-cell form { margin: 0; }
     </style>
@@ -55,18 +55,38 @@
             <div class="saldo {{ 'positivo' if saldo_periodo >= 0 else 'negativo' }}">
                 R$ {{ "%.2f"|format(saldo_periodo) }}
             </div>
-            <!-- --- TRECHO MODIFICADO --- -->
             <div class="totais">
                 <span class="entradas">Entradas: R$ {{ "%.2f"|format(total_entradas_periodo) }}</span>
                 <span class="saidas">Saídas: R$ {{ "%.2f"|format(total_saidas_periodo) }}</span>
                 <span class="fiados">Fiados: R$ {{ "%.2f"|format(total_fiados_periodo) }}</span>
             </div>
-            <!-- --- FIM DO TRECHO MODIFICADO --- -->
         </div>
 
+        <!-- --- Formulário de Filtros Restaurado --- -->
         <form class="filter-form" method="get" action="{{ url_for('extrato') }}">
-            <!-- Formulário de filtros (sem alterações) -->
+            <div>
+                <label for="periodo">Filtrar por Período</label>
+                <select name="periodo" id="periodo">
+                    <option value="semana_atual" {% if periodo_selecionado == 'semana_atual' %}selected{% endif %}>Semana Atual</option>
+                    <option value="ultimos_7_dias" {% if periodo_selecionado == 'ultimos_7_dias' %}selected{% endif %}>Últimos 7 dias</option>
+                    <option value="ultimos_15_dias" {% if periodo_selecionado == 'ultimos_15_dias' %}selected{% endif %}>Últimos 15 dias</option>
+                    <option value="mes_atual" {% if periodo_selecionado == 'mes_atual' %}selected{% endif %}>Mês Atual</option>
+                    <option value="personalizado" {% if periodo_selecionado == 'personalizado' %}selected{% endif %}>Personalizado</option>
+                </select>
+            </div>
+            <div id="custom-range">
+                <div>
+                    <label for="start_date">De:</label>
+                    <input type="date" name="start_date" id="start_date" value="{{ start_date }}">
+                </div>
+                <div>
+                    <label for="end_date">Até:</label>
+                    <input type="date" name="end_date" id="end_date" value="{{ end_date }}">
+                </div>
+            </div>
+            <button type="submit" class="btn">Filtrar</button>
         </form>
+        <!-- --- Fim do Formulário --- -->
 
         <h2>Histórico do Período</h2>
         <div class="table-container">
@@ -85,14 +105,12 @@
                     <tr>
                         <td>{{ transacao.data_transacao.strftime('%d/%m/%Y') }}</td>
                         <td>{{ transacao.descricao }}</td>
-                        <!-- --- TRECHO MODIFICADO --- -->
                         <td class="tipo-{{ transacao.tipo }}">
                             {{ "%.2f"|format(transacao.valor) }}
                         </td>
                         <td class="tipo-{{ transacao.tipo }}">
                             {{ transacao.tipo.capitalize() }}
                         </td>
-                        <!-- --- FIM DO TRECHO MODIFICADO --- -->
                         <td class="actions-cell">
                             <a href="{{ url_for('edit_transacao', id=transacao.id) }}" class="btn">Editar</a>
                             <form action="{{ url_for('delete_transacao', id=transacao.id) }}" method="post" onsubmit="return confirm('Tem certeza que deseja apagar esta transação?');">
@@ -107,7 +125,19 @@
     </div>
 
     <script>
-        // Script dos filtros (sem alterações)
+        const periodoSelect = document.getElementById('periodo');
+        const customRangeDiv = document.getElementById('custom-range');
+
+        function toggleCustomRange() {
+            if (periodoSelect.value === 'personalizado') {
+                customRangeDiv.style.display = 'flex';
+            } else {
+                customRangeDiv.style.display = 'none';
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', toggleCustomRange);
+        periodoSelect.addEventListener('change', toggleCustomRange);
     </script>
 </body>
 </html>
