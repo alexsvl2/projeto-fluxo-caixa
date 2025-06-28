@@ -29,11 +29,14 @@
             <label for="valor">Valor</label>
             <input type="number" name="valor" id="valor" step="0.01" value="{{ transacao.valor }}" required>
             
+            <!-- --- TRECHO MODIFICADO --- -->
             <label>Tipo</label>
             <div>
                 <label><input type="radio" name="tipo" value="entrada" {% if transacao.tipo == 'entrada' %}checked{% endif %} required> Entrada</label>
                 <label><input type="radio" name="tipo" value="saida" {% if transacao.tipo == 'saida' %}checked{% endif %}> Saída</label>
+                <label><input type="radio" name="tipo" value="fiado" {% if transacao.tipo == 'fiado' %}checked{% endif %}> Fiado</label>
             </div>
+            <!-- --- FIM DO TRECHO MODIFICADO --- -->
             
             <button type="submit">Salvar Alterações</button>
         </form>

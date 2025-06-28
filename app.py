@@ -1,5 +1,4 @@
 import os
-import traceback # Biblioteca adicionada para depuração
 from datetime import date, timedelta
 from flask import Flask, render_template, request, redirect, url_for, flash, abort
 from flask_sqlalchemy import SQLAlchemy
@@ -10,7 +9,6 @@ from werkzeug.security import generate_password_hash, check_password_hash
 app = Flask(__name__)
 
 # --- CONFIGURAÇÃO DO BANCO DE DADOS E DA APP ---
-# A URL do banco de dados será lida de uma variável de ambiente na Render
 app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL')
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['SECRET_KEY'] = 'uma-chave-secreta-muito-dificil-de-adivinhar'
@@ -73,10 +71,21 @@ def logout():
 @login_required
 def index():
     transacoes = Transacao.query.all()
+    # --- TRECHO MODIFICADO ---
     total_entradas = sum(t.valor for t in transacoes if t.tipo == 'entrada')
     total_saidas = sum(t.valor for t in transacoes if t.tipo == 'saida')
-    saldo = total_entradas - total_saidas
-    return render_template('index.html', saldo=saldo, total_entradas=total_entradas, total_saidas=total_saidas)
+    total_fiados = sum(t.valor for t in transacoes if t.tipo == 'fiado') # Calcula o total de fiados
+    
+    saldo = total_entradas - total_saidas # O saldo principal não inclui fiados
+
+    return render_template(
+        'index.html', 
+        saldo=saldo, 
+        total_entradas=total_entradas, 
+        total_saidas=total_saidas,
+        total_fiados=total_fiados # Envia o total de fiados para a página
+    )
+    # --- FIM DO TRECHO MODIFICADO ---
 
 @app.route('/extrato')
 @login_required
@@ -86,6 +95,7 @@ def extrato():
 
     query = Transacao.query
     
+    # Lógica de filtro de data (sem alterações)
     if periodo == 'semana_atual':
         start_date = today - timedelta(days=today.weekday())
         query = query.filter(Transacao.data_transacao >= start_date)
@@ -106,18 +116,22 @@ def extrato():
         
     transacoes = query.order_by(Transacao.data_transacao.desc(), Transacao.id.desc()).all()
     
+    # --- TRECHO MODIFICADO ---
     total_entradas_periodo = sum(t.valor for t in transacoes if t.tipo == 'entrada')
     total_saidas_periodo = sum(t.valor for t in transacoes if t.tipo == 'saida')
+    total_fiados_periodo = sum(t.valor for t in transacoes if t.tipo == 'fiado') # Calcula fiados do período
     saldo_periodo = total_entradas_periodo - total_saidas_periodo
     
     return render_template('extrato.html', transacoes=transacoes, periodo_selecionado=periodo,
                            start_date=request.args.get('start_date', ''), end_date=request.args.get('end_date', ''),
-                           saldo_periodo=saldo_periodo, total_entradas_periodo=total_entradas_periodo, total_saidas_periodo=total_saidas_periodo)
-
+                           saldo_periodo=saldo_periodo, total_entradas_periodo=total_entradas_periodo, 
+                           total_saidas_periodo=total_saidas_periodo, total_fiados_periodo=total_fiados_periodo)
+    # --- FIM DO TRECHO MODIFICADO ---
 
 @app.route('/add', methods=['POST'])
 @login_required
 def add_transacao():
+    # Nenhuma alteração necessária aqui, pois ele já salva o 'tipo' vindo do formulário.
     data_str = request.form.get('data_transacao')
     nova_transacao = Transacao(
         data_transacao=date.fromisoformat(data_str) if data_str else date.today(),
@@ -132,26 +146,21 @@ def add_transacao():
 @app.route('/<int:id>/edit', methods=['GET', 'POST'])
 @login_required
 def edit_transacao(id):
-    # --- TRECHO MODIFICADO ---
-    try:
-        transacao = Transacao.query.get_or_404(id)
-        if request.method == 'POST':
-            transacao.data_transacao = date.fromisoformat(request.form['data_transacao'])
-            transacao.tipo = request.form['tipo']
-            transacao.descricao = request.form['descricao']
-            transacao.valor = float(request.form['valor'])
-            db.session.commit()
-            return redirect(url_for('extrato'))
-        return render_template('edit.html', transacao=transacao)
-    except Exception as e:
-        # Retorna o erro exato e o traceback completo para depuração.
-        tb = traceback.format_exc()
-        return f"<h1>Ocorreu um erro na rota de edição:</h1><pre>{e}\n\n{tb}</pre>", 500
-    # --- FIM DO TRECHO MODIFICADO ---
+    # Nenhuma alteração na lógica, apenas o template 'edit.html' será modificado.
+    transacao = Transacao.query.get_or_404(id)
+    if request.method == 'POST':
+        transacao.data_transacao = date.fromisoformat(request.form['data_transacao'])
+        transacao.tipo = request.form['tipo']
+        transacao.descricao = request.form['descricao']
+        transacao.valor = float(request.form['valor'])
+        db.session.commit()
+        return redirect(url_for('extrato'))
+    return render_template('edit.html', transacao=transacao)
 
 @app.route('/<int:id>/delete', methods=['POST'])
 @login_required
 def delete_transacao(id):
+    # Nenhuma alteração necessária aqui.
     transacao = Transacao.query.get_or_404(id)
     db.session.delete(transacao)
     db.session.commit()

@@ -7,8 +7,8 @@
     <style>
         body { font-family: Arial, sans-serif; margin: 20px; color: #333; }
         .container { max-width: 800px; margin: auto; background: #f9f9f9; padding: 20px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
-        h1 { color: #0056b3; text-align: center; }
-        .saldo-container { padding: 15px; background: #eef; border-radius: 5px; text-align: center; margin-bottom: 20px; }
+        h1, h2 { color: #0056b3; text-align: center; }
+        .saldo-container { padding: 15px; background: #eef; border-radius: 5px; text-align: center; margin-bottom: 10px; }
         .saldo { font-size: 2.5em; font-weight: bold; }
         .saldo.positivo { color: #28a745; }
         .saldo.negativo { color: #dc3545; }
@@ -16,6 +16,11 @@
         .entradas { color: #28a745; }
         .saidas { color: #dc3545; }
         
+        /* --- TRECHO MODIFICADO --- */
+        .fiado-container { padding: 10px; background-color: #fffbe6; border: 1px solid #ffe58f; border-radius: 5px; text-align: center; margin-bottom: 20px;}
+        .saldo-fiado { color: #d46b08; font-size: 1.5em; font-weight: bold;}
+        /* --- FIM DO TRECHO MODIFICADO --- */
+
         button, .btn { padding: 12px 20px; background-color: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer; text-decoration: none; display: block; width: 100%; font-size: 16px; text-align: center; box-sizing: border-box; }
         button:hover, .btn:hover { background-color: #0056b3; }
         .btn-secondary { background-color: #6c757d; margin-top: 10px; }
@@ -31,7 +36,6 @@
 </head>
 <body>
     <div class="container">
-        <!-- A linha com o erro foi removida daqui -->
         <h1>Meu Fluxo de Caixa</h1>
 
         <div class="saldo-container">
@@ -44,6 +48,15 @@
                 <span class="saidas">Saídas: R$ {{ "%.2f"|format(total_saidas) }}</span>
             </div>
         </div>
+
+        <!-- --- TRECHO MODIFICADO --- -->
+        <div class="fiado-container">
+            <h2>Saldo Fiados</h2>
+            <div class="saldo-fiado">
+                R$ {{ "%.2f"|format(total_fiados) }}
+            </div>
+        </div>
+        <!-- --- FIM DO TRECHO MODIFICADO --- -->
 
         <!-- Botões de ação principais -->
         <button id="addTransactionBtn">Adicionar Nova Transação</button>
@@ -59,10 +72,13 @@
                 <input type="date" name="data_transacao" id="dateField" required>
                 <input type="text" name="descricao" placeholder="Descrição (Ex: Salário, Aluguel)" required>
                 <input type="number" name="valor" step="0.01" min="0.01" placeholder="Valor" required>
+                <!-- --- TRECHO MODIFICADO --- -->
                 <div>
                     <label><input type="radio" name="tipo" value="entrada" required> Entrada</label>
                     <label><input type="radio" name="tipo" value="saida"> Saída</label>
+                    <label><input type="radio" name="tipo" value="fiado"> Fiado</label>
                 </div>
+                <!-- --- FIM DO TRECHO MODIFICADO --- -->
                 <button type="submit">Adicionar Transação</button>
             </form>
         </div>
