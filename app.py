@@ -71,31 +71,36 @@ def logout():
 @login_required
 def index():
     transacoes = Transacao.query.all()
-    # --- TRECHO MODIFICADO ---
     total_entradas = sum(t.valor for t in transacoes if t.tipo == 'entrada')
     total_saidas = sum(t.valor for t in transacoes if t.tipo == 'saida')
-    total_fiados = sum(t.valor for t in transacoes if t.tipo == 'fiado') # Calcula o total de fiados
+    total_fiados = sum(t.valor for t in transacoes if t.tipo == 'fiado')
     
-    saldo = total_entradas - total_saidas # O saldo principal não inclui fiados
+    saldo = total_entradas - total_saidas
 
     return render_template(
         'index.html', 
         saldo=saldo, 
         total_entradas=total_entradas, 
         total_saidas=total_saidas,
-        total_fiados=total_fiados # Envia o total de fiados para a página
+        total_fiados=total_fiados
     )
-    # --- FIM DO TRECHO MODIFICADO ---
 
 @app.route('/extrato')
 @login_required
 def extrato():
+    query = Transacao.query
+
+    # --- TRECHO MODIFICADO ---
+    # Filtro por tipo de transação
+    tipo_filtro = request.args.get('tipo_filtro', 'todos')
+    if tipo_filtro and tipo_filtro != 'todos':
+        query = query.filter(Transacao.tipo == tipo_filtro)
+    # --- FIM DO TRECHO MODIFICADO ---
+
+    # Filtro por período
     periodo = request.args.get('periodo', 'mes_atual')
     today = date.today()
-
-    query = Transacao.query
     
-    # Lógica de filtro de data (sem alterações)
     if periodo == 'semana_atual':
         start_date = today - timedelta(days=today.weekday())
         query = query.filter(Transacao.data_transacao >= start_date)
@@ -116,22 +121,21 @@ def extrato():
         
     transacoes = query.order_by(Transacao.data_transacao.desc(), Transacao.id.desc()).all()
     
-    # --- TRECHO MODIFICADO ---
     total_entradas_periodo = sum(t.valor for t in transacoes if t.tipo == 'entrada')
     total_saidas_periodo = sum(t.valor for t in transacoes if t.tipo == 'saida')
-    total_fiados_periodo = sum(t.valor for t in transacoes if t.tipo == 'fiado') # Calcula fiados do período
+    total_fiados_periodo = sum(t.valor for t in transacoes if t.tipo == 'fiado')
     saldo_periodo = total_entradas_periodo - total_saidas_periodo
     
-    return render_template('extrato.html', transacoes=transacoes, periodo_selecionado=periodo,
+    return render_template('extrato.html', transacoes=transacoes, 
+                           periodo_selecionado=periodo,
+                           tipo_selecionado=tipo_filtro, # Envia o tipo selecionado para o template
                            start_date=request.args.get('start_date', ''), end_date=request.args.get('end_date', ''),
                            saldo_periodo=saldo_periodo, total_entradas_periodo=total_entradas_periodo, 
                            total_saidas_periodo=total_saidas_periodo, total_fiados_periodo=total_fiados_periodo)
-    # --- FIM DO TRECHO MODIFICADO ---
 
 @app.route('/add', methods=['POST'])
 @login_required
 def add_transacao():
-    # Nenhuma alteração necessária aqui, pois ele já salva o 'tipo' vindo do formulário.
     data_str = request.form.get('data_transacao')
     nova_transacao = Transacao(
         data_transacao=date.fromisoformat(data_str) if data_str else date.today(),
@@ -146,7 +150,6 @@ def add_transacao():
 @app.route('/<int:id>/edit', methods=['GET', 'POST'])
 @login_required
 def edit_transacao(id):
-    # Nenhuma alteração na lógica, apenas o template 'edit.html' será modificado.
     transacao = Transacao.query.get_or_404(id)
     if request.method == 'POST':
         transacao.data_transacao = date.fromisoformat(request.form['data_transacao'])
@@ -160,8 +163,8 @@ def edit_transacao(id):
 @app.route('/<int:id>/delete', methods=['POST'])
 @login_required
 def delete_transacao(id):
-    # Nenhuma alteração necessária aqui.
     transacao = Transacao.query.get_or_404(id)
     db.session.delete(transacao)
     db.session.commit()
     return redirect(url_for('extrato'))
+
