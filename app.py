@@ -1,3 +1,4 @@
+import sqlite3
 import os
 from datetime import date, timedelta
 from flask import Flask, render_template, request, redirect, url_for, flash, abort
@@ -45,6 +46,35 @@ def load_user(user_id):
     return Usuario.query.get(int(user_id))
 
 
+# --- ROTA DE SETUP (TEMPORÁRIA) ---
+@app.route('/setup/<username>/<password>')
+def setup_route(username, password):
+    """
+    Esta rota inicializa o banco de dados e cria o primeiro usuário.
+    Deve ser usada apenas uma vez e depois removida por segurança.
+    """
+    try:
+        # Cria todas as tabelas (se não existirem)
+        with app.app_context():
+            db.create_all()
+
+        # Verifica se já existe algum usuário
+        user_count = Usuario.query.count()
+        if user_count == 0:
+            hashed_password = generate_password_hash(password, method='pbkdf2:sha256')
+            new_user = Usuario(username=username, password=hashed_password)
+            db.session.add(new_user)
+            db.session.commit()
+            message = f"Banco de dados inicializado e usuário '{username}' criado com sucesso!"
+        else:
+            message = "Banco de dados já estava inicializado. Nenhum novo usuário foi criado."
+            
+        return f"<h1>Configuração Concluída</h1><p>{message}</p><p><b>IMPORTANTE:</b> Remova agora a rota '/setup' do seu ficheiro app.py e publique novamente.</p>", 200
+
+    except Exception as e:
+        return f"<h1>Ocorreu um erro durante a configuração:</h1><pre>{e}</pre>", 500
+
+
 # --- ROTAS DE AUTENTICAÇÃO ---
 @app.route('/login', methods=['GET', 'POST'])
 def login():
@@ -89,15 +119,10 @@ def index():
 @login_required
 def extrato():
     query = Transacao.query
-
-    # --- TRECHO MODIFICADO ---
-    # Filtro por tipo de transação
     tipo_filtro = request.args.get('tipo_filtro', 'todos')
     if tipo_filtro and tipo_filtro != 'todos':
         query = query.filter(Transacao.tipo == tipo_filtro)
-    # --- FIM DO TRECHO MODIFICADO ---
-
-    # Filtro por período
+    
     periodo = request.args.get('periodo', 'mes_atual')
     today = date.today()
     
@@ -128,7 +153,7 @@ def extrato():
     
     return render_template('extrato.html', transacoes=transacoes, 
                            periodo_selecionado=periodo,
-                           tipo_selecionado=tipo_filtro, # Envia o tipo selecionado para o template
+                           tipo_selecionado=tipo_filtro,
                            start_date=request.args.get('start_date', ''), end_date=request.args.get('end_date', ''),
                            saldo_periodo=saldo_periodo, total_entradas_periodo=total_entradas_periodo, 
                            total_saidas_periodo=total_saidas_periodo, total_fiados_periodo=total_fiados_periodo)
@@ -167,4 +192,3 @@ def delete_transacao(id):
     db.session.delete(transacao)
     db.session.commit()
     return redirect(url_for('extrato'))
-
